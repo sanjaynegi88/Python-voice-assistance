@@ -1,0 +1,159 @@
+{% extends "dashboard/base.html" %}
+{% block title %}{{ customer.full_name }}{% endblock %}
+{% block heading %}{{ customer.full_name }}{% endblock %}
+{% block lede %}Everything the voice agent can see or change for this customer, and everything it has already done.{% endblock %}
+
+{% block content %}
+<div class="grid cols-2">
+  <section class="panel">
+    <h2>Profile</h2>
+    <div class="panel-body">
+      <dl class="kv">
+        <dt>Phone (SMS destination)</dt><dd>{{ customer.phone|default:"—" }}</dd>
+        <dt>Email</dt><dd>{{ customer.email|default:"—" }}</dd>
+        <dt>Date of birth</dt><dd>{{ customer.date_of_birth|date:"Y-m-d"|default:"—" }}</dd>
+        <dt>National ID, last 4</dt>
+        <dd>{{ customer.national_id_last4|default:"—" }}
+          <span class="pill mute">KYC only — not used to authenticate</span>
+        </dd>
+        <dt>Customer since</dt><dd>{{ customer.created_at|date:"Y-m-d" }}</dd>
+      </dl>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Accounts &amp; cards</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th>Status</th><th>Cards</th></tr></thead>
+        <tbody>
+          {% for account in customer.accounts.all %}
+          <tr>
+            <td class="mono">{{ account.account_number }}</td>
+            <td>{{ account.get_account_type_display }}</td>
+            <td class="num mono">{{ account.balance|floatformat:2 }} {{ account.currency }}</td>
+            <td>
+              <span class="pill {{ account.status }}">{{ account.get_status_display }}</span>
+              {% if account.is_locked %}<span class="pill bad">locked</span>{% endif %}
+              {% if account.failed_pin_attempts %}<span class="pill warn">{{ account.failed_pin_attempts }} bad PIN</span>{% endif %}
+            </td>
+            <td>
+              {% for card in account.cards.all %}
+                <span class="pill {{ card.status }}">{{ card.brand }} ••{{ card.last4 }}</span>
+              {% empty %}—{% endfor %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="empty">No accounts.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Test credentials <small>for calling the bot</small></h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Account number</th><th>PIN</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for row in test_credentials %}
+        <tr>
+          <td class="mono">{{ row.account.account_number }}</td>
+          <td class="mono">{% if row.is_seeded %}{{ row.pin }}{% else %}—{% endif %}</td>
+          <td>
+            {% if not row.is_seeded %}
+              <span class="pill mute">not seed data</span>
+              <small style="color:var(--muted)">PIN was set outside <code>seed_demo</code>, so it cannot be shown.</small>
+            {% elif row.still_valid %}
+              <span class="pill ok">verified against the stored hash</span>
+            {% else %}
+              <span class="pill bad">stale</span>
+              <small style="color:var(--muted)">Changed since seeding. Run <code>manage.py seed_demo</code> to restore it.</small>
+            {% endif %}
+            {% if row.account.is_locked %}<span class="pill bad">locked {{ row.account.lock_seconds_remaining }}s</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="empty">No accounts.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="panel-body" style="padding-top:0">
+    <p style="color:var(--muted);margin:12px 0 0">
+      PINs are stored hashed and cannot be read back. What you see here is the value from
+      <code>bank/demo_data.py</code>, checked against the stored hash on each page load — so a
+      "verified" row is one that will authenticate right now. This panel exists because these
+      are fictional demo accounts; it would not belong in a system holding real ones.
+    </p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Tickets</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Ticket</th><th>Card</th><th>Reason</th><th>Detail</th><th>Status</th><th>Raised</th></tr></thead>
+      <tbody>
+        {% for ticket in tickets %}
+        <tr>
+          <td class="mono">{{ ticket.ticket_number }}</td>
+          <td>{% if ticket.card %}••{{ ticket.card.last4 }}{% else %}—{% endif %}</td>
+          <td>{{ ticket.get_reason_display }}</td>
+          <td>{{ ticket.incident_description|default:"—"|truncatechars:80 }}</td>
+          <td><span class="pill {{ ticket.status }}">{{ ticket.get_status_display }}</span></td>
+          <td class="mono">{{ ticket.created_at|date:"d M H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty">No tickets for this customer.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Notifications sent</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>When</th><th>Channel</th><th>To</th><th>Subject</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for note in notifications %}
+        <tr>
+          <td class="mono">{{ note.created_at|date:"d M H:i:s" }}</td>
+          <td>{{ note.get_channel_display }}</td>
+          <td class="mono">{{ note.destination }}</td>
+          <td>{{ note.subject|default:"—" }}</td>
+          <td><span class="pill {{ note.status }}">{{ note.get_status_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">Nothing sent yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Tool calls against this customer</h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>When</th><th>Tool</th><th>Result</th><th class="num">ms</th></tr></thead>
+      <tbody>
+        {% for log in calls %}
+        <tr>
+          <td class="mono">{{ log.created_at|date:"d M H:i:s" }}</td>
+          <td class="mono">{{ log.tool_name }}</td>
+          <td>{% if log.ok %}<span class="pill ok">ok</span>{% else %}<span class="pill bad">{{ log.error_code }}</span>{% endif %}</td>
+          <td class="num">{{ log.duration_ms }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="empty">No calls recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Tool logs{% endblock %}
+{% block heading %}Tool call log{% endblock %}
+{% block lede %}The audit trail for the agent: one row per tool invocation, with the request and response payloads. PINs, OTP codes and session tokens are redacted before anything is written.{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>
+    Calls
+    <small>
+      <form class="filters" method="get">
+        <select name="tool">
+          <option value="">All tools</option>
+          {% for name in tool_names %}
+          <option value="{{ name }}" {% if name == selected_tool %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+        <label style="color:var(--muted)">
+          <input type="checkbox" name="failures" value="1" {% if only_failures %}checked{% endif %}> failures only
+        </label>
+        <button class="btn ghost" type="submit">Filter</button>
+      </form>
+    </small>
+  </h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>When</th><th>Tool</th><th>Result</th><th>Account</th>
+          <th>Session</th><th class="num">ms</th><th>Request</th><th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="mono">{{ log.created_at|date:"d M H:i:s" }}</td>
+          <td class="mono">{{ log.tool_name }}</td>
+          <td>
+            {% if log.ok %}<span class="pill ok">{{ log.http_status }} ok</span>
+            {% else %}<span class="pill bad">{{ log.http_status }} {{ log.error_code }}</span>{% endif %}
+          </td>
+          <td class="mono">{% if log.account %}{{ log.account.account_number }}{% else %}—{% endif %}</td>
+          <td class="mono">{{ log.session_token_prefix|default:"—" }}</td>
+          <td class="num">{{ log.duration_ms }}</td>
+          <td class="mono" style="max-width:280px;word-break:break-all;color:var(--muted)">{{ log.request_payload }}</td>
+          <td class="mono" style="max-width:340px;word-break:break-all;color:var(--muted)">{{ log.response_payload }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="empty">No matching calls.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dashboard{% endblock %} · AIDA Bank Ops</title>
+  <link rel="stylesheet" href="{% static 'dashboard/app.css' %}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏦</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{% url 'dashboard:overview' %}">
+    <span class="brand-mark">AB</span>
+    <span>AIDA Bank <em>ops console</em></span>
+  </a>
+  {% if user.is_authenticated %}
+  <nav class="nav">
+    <a href="{% url 'dashboard:overview' %}" class="{% if active == 'overview' %}on{% endif %}">Overview</a>
+    <a href="{% url 'dashboard:customers' %}" class="{% if active == 'customers' %}on{% endif %}">Customers</a>
+    <a href="{% url 'dashboard:accounts' %}" class="{% if active == 'accounts' %}on{% endif %}">Accounts</a>
+    <a href="{% url 'dashboard:tickets' %}" class="{% if active == 'tickets' %}on{% endif %}">Tickets</a>
+    <a href="{% url 'dashboard:notifications' %}" class="{% if active == 'notifications' %}on{% endif %}">Notifications</a>
+    <a href="{% url 'dashboard:tool-logs' %}" class="{% if active == 'logs' %}on{% endif %}">Tool&nbsp;logs</a>
+    <a href="{% url 'dashboard:settings' %}" class="{% if active == 'settings' %}on{% endif %}">Settings</a>
+  </nav>
+  <form class="signout" method="post" action="{% url 'dashboard:logout' %}">
+    {% csrf_token %}
+    <span class="who">{{ user.get_username }}</span>
+    <button type="submit">Sign out</button>
+  </form>
+  {% endif %}
+</header>
+
+<main class="wrap">
+  <div class="page-head">
+    <h1>{% block heading %}{% endblock %}</h1>
+    <p class="lede">{% block lede %}{% endblock %}</p>
+  </div>
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="foot">
+  Demo data only — no real customer information. Tool API: <code>/api/v1/tools/…</code>
+</footer>
+</body>
+</html>

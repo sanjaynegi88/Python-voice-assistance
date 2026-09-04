@@ -1,0 +1,38 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block heading %}Notifications{% endblock %}
+{% block lede %}Every out-of-band message the agent tried to send, delivered or not. With <code>NOTIFICATION_PROVIDER=console</code> nothing leaves the machine — the full message body is rendered here instead, which is what makes the demo self-contained.{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Outbox</h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Channel</th><th>To</th><th>Ticket</th><th>Provider</th><th>Status</th><th>Message</th></tr>
+      </thead>
+      <tbody>
+        {% for note in notifications %}
+        <tr>
+          <td class="mono">{{ note.created_at|date:"d M H:i:s" }}</td>
+          <td>{{ note.get_channel_display }}</td>
+          <td class="mono">{{ note.destination|default:"—" }}</td>
+          <td class="mono">{% if note.ticket %}{{ note.ticket.ticket_number }}{% else %}—{% endif %}</td>
+          <td class="mono">{{ note.provider }}</td>
+          <td>
+            <span class="pill {{ note.status }}">{{ note.get_status_display }}</span>
+            {% if note.error %}<br><small style="color:var(--bad)">{{ note.error|truncatechars:60 }}</small>{% endif %}
+          </td>
+          <td style="max-width:420px">
+            {% if note.subject %}<strong>{{ note.subject }}</strong><br>{% endif %}
+            <span style="white-space:pre-wrap;color:var(--muted)">{{ note.body|truncatechars:260 }}</span>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty">Nothing sent yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Providers{% endblock %}
+{% block heading %}Notification providers{% endblock %}
+{% block lede %}Credentials for the email and SMS accounts this system sends OTP codes and card-block confirmations through. Saved here they take effect immediately — no restart, no redeploy.{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a href="{% url 'dashboard:settings' %}">Integration</a>
+  <a href="{% url 'dashboard:providers' %}" class="on">Providers</a>
+  <a href="{% url 'dashboard:tunnel' %}">Live URL</a>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+  <div class="note {% if message.tags == 'error' %}bad{% elif message.tags == 'success' %}good{% endif %}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="grid cols-2">
+  <div class="stat">
+    <div class="k">Email</div>
+    <div class="v" style="font-size:18px">{{ config.get_email_provider_display }}</div>
+    <div class="sub">
+      {% if email_ready %}<span class="pill ok">ready</span>
+      {% else %}<span class="pill bad">missing: {{ email_missing|join:", " }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="k">SMS</div>
+    <div class="v" style="font-size:18px">{{ config.get_sms_provider_display }}</div>
+    <div class="sub">
+      {% if sms_ready %}<span class="pill ok">ready</span>
+      {% else %}<span class="pill bad">missing: {{ sms_missing|join:", " }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <section class="panel">
+    <h2>Routing <small>which provider handles which channel</small></h2>
+    <div class="panel-body">
+      <div class="field-grid">
+        {% for field in form %}{% if field.name in "email_provider,sms_provider,default_channel" %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<small class="err">{{ error }}</small>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+      <p style="color:var(--muted);margin-bottom:0">
+        <strong>Console</strong> stores the message and shows it on the Notifications page
+        without sending anything — leave it there for a self-contained demo.
+      </p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Brevo <small>one API key covers transactional email and SMS</small></h2>
+    <div class="panel-body">
+      <div class="note">
+        Key from <em>Brevo → SMTP &amp; API → API keys</em> (starts <code>xkeysib-</code>).
+        The sender email must be a verified sender on the account, and SMS needs
+        credits plus, in some countries, a pre-registered sender ID.
+      </div>
+      <div class="field-grid">
+        {% for field in form %}{% if "brevo" in field.name %}
+        <div class="field {% if field.name == 'brevo_api_key' %}wide{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<small class="err">{{ error }}</small>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>SMTP <small>any mail server, including Brevo's relay</small></h2>
+    <div class="panel-body">
+      <div class="field-grid">
+        {% for field in form %}{% if "smtp" in field.name %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<small class="err">{{ error }}</small>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+      <p style="color:var(--muted);margin-bottom:0">
+        Brevo's relay is <code>smtp-relay.brevo.com</code> port <code>587</code>, using your
+        Brevo login and an SMTP key as the password.
+      </p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Twilio <small>SMS</small></h2>
+    <div class="panel-body">
+      <div class="field-grid">
+        {% for field in form %}{% if "twilio" in field.name %}
+        <div class="field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<small class="err">{{ error }}</small>{% endfor %}
+        </div>
+        {% endif %}{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn" type="submit" name="action" value="save">Save settings</button>
+    <button class="btn ghost" type="submit" name="action" value="reload"
+            onclick="return confirm('Discard the stored credentials and re-read them from the environment?')">
+      Reload from environment
+    </button>
+    {% if config.updated_by %}
+    <span style="color:var(--muted)">last changed by {{ config.updated_by }} on {{ config.updated_at|date:"d M Y H:i" }}</span>
+    {% endif %}
+  </div>
+</form>
+
+<section class="panel">
+  <h2>Send a test message</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="panel-body">
+      <div class="filters">
+        <select name="test_channel">
+          <option value="sms">SMS</option>
+          <option value="email">Email</option>
+        </select>
+        <input type="text" name="test_destination" placeholder="+41791112233 or you@example.com" required>
+        <button class="btn" type="submit" name="action" value="test">Send test</button>
+      </div>
+      <p style="color:var(--muted);margin:12px 0 0">
+        Goes through the same code path as a real OTP, using whatever is saved above.
+        A test is not recorded on the Notifications page — only real customer messages are.
+      </p>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Last 10 messages <small><a href="{% url 'dashboard:notifications' %}">see all</a></small></h2>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>When</th><th>Channel</th><th>Provider</th><th>To</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for note in recent %}
+        <tr>
+          <td class="mono">{{ note.created_at|date:"d M H:i:s" }}</td>
+          <td>{{ note.get_channel_display }}</td>
+          <td class="mono">{{ note.provider }}</td>
+          <td class="mono">{{ note.destination|default:"—" }}</td>
+          <td>
+            <span class="pill {{ note.status }}">{{ note.get_status_display }}</span>
+            {% if note.error %}<br><small style="color:var(--bad)">{{ note.error|truncatechars:70 }}</small>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">Nothing sent yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Customers{% endblock %}
+{% block heading %}Customers{% endblock %}
+{% block lede %}Every person the voice bot can authenticate, with the accounts and cards attached to them.{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>
+    Directory
+    <small>
+      <form class="filters" method="get">
+        <input type="text" name="q" value="{{ query }}" placeholder="Name, email, phone or account no.">
+        <button class="btn ghost" type="submit">Search</button>
+        {% if query %}<a class="btn ghost" href="{% url 'dashboard:customers' %}">Clear</a>{% endif %}
+      </form>
+    </small>
+  </h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th><th>Contact</th><th>Date of birth</th>
+          <th>Accounts</th><th class="num">Balance</th><th>Cards</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in customers %}
+        <tr>
+          <td><strong>{{ customer.full_name }}</strong></td>
+          <td class="mono">
+            {{ customer.phone }}<br>
+            <span style="color:var(--muted)">{{ customer.email|default:"—" }}</span>
+          </td>
+          <td class="mono">{{ customer.date_of_birth|date:"Y-m-d"|default:"—" }}</td>
+          <td class="mono">
+            {% for account in customer.accounts.all %}
+              {{ account.account_number }} <span class="pill mute">{{ account.get_account_type_display }}</span><br>
+            {% empty %}—{% endfor %}
+          </td>
+          <td class="num mono">
+            {% for account in customer.accounts.all %}
+              {{ account.balance|floatformat:2 }} {{ account.currency }}<br>
+            {% empty %}—{% endfor %}
+          </td>
+          <td>
+            {% for account in customer.accounts.all %}
+              {% for card in account.cards.all %}
+                <span class="pill {{ card.status }}">••{{ card.last4 }} {{ card.status }}</span>
+              {% endfor %}
+            {% endfor %}
+          </td>
+          <td><a href="{% url 'dashboard:customer-detail' customer.pk %}">Open</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty">No customers{% if query %} match “{{ query }}”{% else %}. Run <code>manage.py seed_demo</code>{% endif %}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

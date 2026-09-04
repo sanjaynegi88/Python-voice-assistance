@@ -1,0 +1,23 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Sign in{% endblock %}
+
+{% block content %}
+<div class="login-card">
+  <h1>Ops console</h1>
+  <p class="lede">Staff sign-in. Seeded credentials are printed by <code>manage.py seed_demo</code>.</p>
+
+  {% if form.errors %}
+    <ul class="errorlist"><li>That username and password didn't match.</li></ul>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    <label for="id_username">Username</label>
+    <input type="text" name="username" id="id_username" autofocus required>
+    <label for="id_password">Password</label>
+    <input type="password" name="password" id="id_password" required>
+    <button class="btn" type="submit">Sign in</button>
+    <input type="hidden" name="next" value="{{ next }}">
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,206 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Settings &amp; integration{% endblock %}
+{% block lede %}Everything AIDA needs to talk to this backend: the base URL, the API key, one entry per tool, and the function-calling schema to paste into the agent configuration.{% endblock %}
+
+{% block content %}
+
+{% for message in messages %}
+<div class="note {% if message.tags == 'error' %}bad{% elif message.tags == 'success' %}good{% endif %}">{{ message }}</div>
+{% endfor %}
+
+<div class="tabs">
+  <a href="{% url 'dashboard:settings' %}" class="on">Integration</a>
+  <a href="{% url 'dashboard:providers' %}">Providers</a>
+  <a href="{% url 'dashboard:tunnel' %}">Live URL</a>
+</div>
+
+{% if not public_base_url_configured %}
+<div class="note warn">
+  <strong>No public address yet</strong> — the URLs below are derived from the address you're
+  browsing on ({{ base_url }}), which AIDA cannot reach. Start a tunnel and these fill in
+  automatically: see the <a href="{% url 'dashboard:tunnel' %}">Live URL</a> tab.
+</div>
+{% endif %}
+
+<section class="panel">
+  <h2>Connection</h2>
+  <div class="panel-body">
+    <dl class="kv">
+      <dt>Base URL</dt>
+      <dd><span id="base-url">{{ base_url }}</span> <button class="btn ghost" data-copy="#base-url">Copy</button></dd>
+
+      <dt>Auth header</dt>
+      <dd>X-API-Key <span style="color:var(--muted)">(or <code>Authorization: Bearer …</code>)</span></dd>
+
+      <dt>API key</dt>
+      <dd>
+        <span id="api-key" data-full="{{ api_key }}" data-masked="{{ api_key_masked }}">{{ api_key_masked }}</span>
+        <button class="btn ghost" id="reveal-key" type="button">Reveal</button>
+        <button class="btn ghost" data-copy="#api-key" data-copy-full="1">Copy</button>
+        {% if key_count > 1 %}<span class="pill mute">{{ key_count }} keys active</span>{% endif %}
+      </dd>
+
+      <dt>Content type</dt>
+      <dd>application/json</dd>
+
+      <dt>Health check</dt>
+      <dd><a href="/api/v1/health" target="_blank">{{ base_url }}/api/v1/health</a> <span class="pill mute">no key needed</span></dd>
+
+      <dt>Schema endpoint</dt>
+      <dd>{{ base_url }}/api/v1/tools/schema <span class="pill mute">key required</span></dd>
+    </dl>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Try it <small>paste into a terminal to confirm the backend is reachable</small></h2>
+  <div class="panel-body">
+    <div class="copy-row"><button class="btn ghost" data-copy="#curl">Copy curl</button></div>
+    <pre id="curl">{{ curl_example }}</pre>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Tool endpoints <small>{{ endpoints|length }} tools</small></h2>
+  {% for endpoint in endpoints %}
+  <details class="endpoint">
+    <summary>
+      <span class="method">{{ endpoint.method }}</span>
+      <span class="path">{{ endpoint.url }}</span>
+      <span class="desc"><strong>{{ endpoint.name }}</strong> — requirement {{ endpoint.requirement }}</span>
+    </summary>
+    <div class="detail">
+      <p style="margin:0;color:var(--muted)">{{ endpoint.summary }}</p>
+      <div>
+        <strong>Required parameters:</strong>
+        {% for param in endpoint.required_params %}<code>{{ param }}</code>{% if not forloop.last %}, {% endif %}{% empty %}none{% endfor %}
+      </div>
+      <div class="grid cols-2">
+        <div>
+          <div class="copy-row"><strong>Sample request</strong></div>
+          <pre class="light">{{ endpoint.sample_request_json }}</pre>
+        </div>
+        <div>
+          <div class="copy-row"><strong>Sample response</strong></div>
+          <pre class="light">{{ endpoint.sample_response_json }}</pre>
+        </div>
+      </div>
+      <div>
+        <div class="copy-row"><strong>JSON schema</strong></div>
+        <pre class="light">{{ endpoint.parameters_json }}</pre>
+      </div>
+    </div>
+  </details>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <h2>Function-calling schema <small>paste into AIDA's tool configuration</small></h2>
+  <div class="panel-body">
+    <div class="copy-row"><button class="btn ghost" data-copy="#schema">Copy schema JSON</button></div>
+    <pre id="schema">{{ schema_json }}</pre>
+  </div>
+</section>
+
+{% if prompt_text %}
+<section class="panel">
+  <h2>Agent system prompt <small>{{ prompt_path }}</small></h2>
+  <div class="panel-body">
+    <div class="copy-row"><button class="btn ghost" data-copy="#prompt">Copy prompt</button></div>
+    <pre id="prompt">{{ prompt_text }}</pre>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>
+    Security policy
+    {% if security.require_otp_for_card_block %}<span class="pill ok">step-up on</span>
+    {% else %}<span class="pill warn">step-up off</span>{% endif %}
+  </h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="panel-body">
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" name="require_otp_for_card_block" style="margin-top:3px"
+               {% if security.require_otp_for_card_block %}checked{% endif %}>
+        <span>
+          <strong>Require a one-time code before blocking a card</strong><br>
+          <span style="color:var(--muted)">
+            Reading a balance never needs it. Blocking a card is irreversible and
+            immediately disruptive, so it can ask for something a PIN cannot give you:
+            proof the caller holds the phone on the account.
+          </span>
+        </span>
+      </label>
+
+      <div class="note warn" style="margin:16px 0 0">
+        <strong>Before turning this on, check the SMS provider actually delivers.</strong>
+        With the provider set to <em>console</em> the code is only written to the
+        <a href="{% url 'dashboard:notifications' %}">Notifications</a> page, so a caller on
+        the phone can never receive it and the conversation deadlocks. Configure and test a
+        real provider on the <a href="{% url 'dashboard:providers' %}">Providers</a> tab first.
+        Current SMS provider: <strong>{{ provider_config.get_sms_provider_display }}</strong>.
+      </div>
+
+      <div class="actions" style="margin:16px 0 0">
+        <button class="btn" type="submit" name="action" value="security">Save policy</button>
+        {% if security.updated_by %}
+        <span style="color:var(--muted)">
+          last changed by {{ security.updated_by }} on {{ security.updated_at|date:"d M Y H:i" }}
+        </span>
+        {% endif %}
+      </div>
+
+      <p style="color:var(--muted);margin:16px 0 0">
+        This is the only security setting editable here. API keys, PIN attempt limits,
+        lockout duration and session TTL stay in <code>.env</code> and read-only, so the
+        web interface cannot be used to weaken the system's own defences.
+      </p>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Runtime configuration <small>read from the environment at start-up</small></h2>
+  <div class="panel-body">
+    <dl class="kv">
+      {% for label, value in runtime %}
+      <dt>{{ label }}</dt><dd>{{ value }}</dd>
+      {% endfor %}
+    </dl>
+    <p style="color:var(--muted);margin-bottom:0">
+      The security and session values come from <code>.env</code> and are read-only here, so a
+      running container can't be loosened through the web UI — change the file and restart.
+      The email and SMS providers are the exception: edit them on the
+      <a href="{% url 'dashboard:providers' %}">Providers</a> tab.
+    </p>
+  </div>
+</section>
+
+<script>
+document.addEventListener('click', function (event) {
+  const trigger = event.target.closest('[data-copy]');
+  if (!trigger) return;
+  const target = document.querySelector(trigger.dataset.copy);
+  if (!target) return;
+  const text = trigger.dataset.copyFull ? (target.dataset.full || target.textContent) : target.textContent;
+  navigator.clipboard.writeText(text.trim()).then(function () {
+    const original = trigger.textContent;
+    trigger.textContent = 'Copied';
+    setTimeout(function () { trigger.textContent = original; }, 1200);
+  });
+});
+
+const revealButton = document.getElementById('reveal-key');
+if (revealButton) {
+  revealButton.addEventListener('click', function () {
+    const node = document.getElementById('api-key');
+    const hidden = revealButton.textContent === 'Reveal';
+    node.textContent = hidden ? node.dataset.full : node.dataset.masked;
+    revealButton.textContent = hidden ? 'Hide' : 'Reveal';
+  });
+}
+</script>
+{% endblock %}

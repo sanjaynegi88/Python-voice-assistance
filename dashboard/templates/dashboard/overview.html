@@ -1,0 +1,126 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block lede %}Live state of the demo bank and the voice agent's activity over the last 24 hours.{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="stat">
+    <div class="k">Customers</div>
+    <div class="v">{{ customer_count }}</div>
+    <div class="sub">{{ account_count }} account{{ account_count|pluralize }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Cards</div>
+    <div class="v">{{ card_count }}</div>
+    <div class="sub">{{ blocked_card_count }} blocked</div>
+  </div>
+  <div class="stat">
+    <div class="k">Open tickets</div>
+    <div class="v">{{ open_ticket_count }}</div>
+    <div class="sub">card blocks awaiting closure</div>
+  </div>
+  <div class="stat">
+    <div class="k">Tool calls / 24h</div>
+    <div class="v">{{ calls_24h }}</div>
+    <div class="sub">
+      {% if failures_24h %}<span class="pill bad">{{ failures_24h }} failed</span>{% else %}no failures{% endif %}
+      · {{ active_session_count }} live session{{ active_session_count|pluralize }}
+    </div>
+  </div>
+</div>
+
+<div class="grid cols-2">
+  <section class="panel">
+    <h2>Tool usage <small>last 24 hours</small></h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Tool</th><th class="num">Calls</th><th class="num">Failed</th></tr></thead>
+        <tbody>
+          {% for row in per_tool %}
+          <tr>
+            <td class="mono">{{ row.tool_name }}</td>
+            <td class="num">{{ row.total }}</td>
+            <td class="num">{% if row.failures %}<span class="pill bad">{{ row.failures }}</span>{% else %}—{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="empty">No tool calls yet. Point AIDA at the URLs on the Settings page.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Deposits under management <small>seeded demo money</small></h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Currency</th><th class="num">Accounts</th><th class="num">Total</th></tr></thead>
+        <tbody>
+          {% for row in totals_by_currency %}
+          <tr>
+            <td>{{ row.currency }}</td>
+            <td class="num">{{ row.accounts }}</td>
+            <td class="num mono">{{ row.total|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="empty">No accounts. Run <code>manage.py seed_demo</code>.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Recent tool calls <small><a href="{% url 'dashboard:tool-logs' %}">see all</a></small></h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Tool</th><th>Result</th><th>Account</th><th class="num">ms</th></tr>
+      </thead>
+      <tbody>
+        {% for log in recent_calls %}
+        <tr>
+          <td class="mono">{{ log.created_at|date:"H:i:s" }}</td>
+          <td class="mono">{{ log.tool_name }}</td>
+          <td>
+            {% if log.ok %}<span class="pill ok">ok</span>
+            {% else %}<span class="pill bad">{{ log.error_code|default:"error" }}</span>{% endif %}
+          </td>
+          <td class="mono">{% if log.account %}{{ log.account.account_number }}{% else %}—{% endif %}</td>
+          <td class="num">{{ log.duration_ms }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="empty">Nothing logged yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Recent tickets <small><a href="{% url 'dashboard:tickets' %}">see all</a></small></h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Ticket</th><th>Account</th><th>Card</th><th>Reason</th><th>Status</th><th>Raised</th></tr>
+      </thead>
+      <tbody>
+        {% for ticket in recent_tickets %}
+        <tr>
+          <td class="mono">{{ ticket.ticket_number }}</td>
+          <td class="mono">{{ ticket.account.account_number }}</td>
+          <td>{% if ticket.card %}{{ ticket.card.label }}{% else %}—{% endif %}</td>
+          <td>{{ ticket.get_reason_display }}</td>
+          <td><span class="pill {{ ticket.status }}">{{ ticket.get_status_display }}</span></td>
+          <td class="mono">{{ ticket.created_at|date:"d M H:i" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="empty">No card blocks raised yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,18 @@
+# Core framework. Django's own views + JsonResponse are used for the tool API
+# (no Django REST Framework, no FastAPI) per the project brief.
+Django>=5.2
+
+# PostgreSQL driver (used by docker compose; SQLite needs no driver).
+psycopg[binary]>=3.1
+
+# WSGI server for the container.
+gunicorn>=22.0
+
+# Reads .env into os.environ for local development.
+python-dotenv>=1.0
+
+# Serves static files from the container without nginx.
+whitenoise>=6.6
+
+# Outbound HTTP for the Twilio SMS provider (avoids pulling the full SDK).
+requests>=2.31

@@ -1,0 +1,57 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Accounts{% endblock %}
+{% block heading %}Accounts{% endblock %}
+{% block lede %}The table the <code>get_account_balance</code> tool reads from. PINs are stored as salted hashes and are never displayed here — reset one from the Django admin if you lose it.{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>
+    Ledger
+    <small>
+      {% for row in grand_totals %}{{ row.total|floatformat:2 }} {{ row.currency }}{% if not forloop.last %} · {% endif %}{% endfor %}
+    </small>
+  </h2>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Account no.</th><th>Holder</th><th>Type</th>
+          <th class="num">Balance</th><th>Status</th><th>Security</th><th>Cards</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for account in accounts %}
+        <tr>
+          <td class="mono"><strong>{{ account.account_number }}</strong></td>
+          <td><a href="{% url 'dashboard:customer-detail' account.customer.pk %}">{{ account.customer.full_name }}</a></td>
+          <td>{{ account.get_account_type_display }}</td>
+          <td class="num mono">{{ account.balance|floatformat:2 }} {{ account.currency }}</td>
+          <td><span class="pill {{ account.status }}">{{ account.get_status_display }}</span></td>
+          <td>
+            {% if account.is_locked %}
+              <span class="pill bad">locked {{ account.lock_seconds_remaining }}s</span>
+            {% elif account.failed_pin_attempts %}
+              <span class="pill warn">{{ account.failed_pin_attempts }} failed PIN</span>
+            {% else %}
+              <span class="pill ok">clear</span>
+            {% endif %}
+          </td>
+          <td>
+            {% for card in account.cards.all %}
+              <span class="pill {{ card.status }}">{{ card.brand }} ••{{ card.last4 }}</span>
+            {% empty %}—{% endfor %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="empty">No accounts. Run <code>python manage.py seed_demo</code>.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="note">
+  A locked account rejects authentication until the lockout expires. Clear it from
+  <a href="/django-admin/bank/account/">Django admin → Accounts → “Clear failed PIN attempts and unlock”</a>.
+</div>
+{% endblock %}

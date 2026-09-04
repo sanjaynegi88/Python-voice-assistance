@@ -1,0 +1,84 @@
+name: aida-voice-bank
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aidabank}
+      POSTGRES_USER: ${POSTGRES_USER:-aidabank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aidabank}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aidabank} -d ${POSTGRES_DB:-aidabank}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not published by default: nothing outside the compose network needs it.
+    # Uncomment to inspect the data with a local client.
+    # ports:
+    #   - "5432:5432"
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Overrides .env so the app always talks to the bundled database.
+      DATABASE_URL: postgres://${POSTGRES_USER:-aidabank}:${POSTGRES_PASSWORD:-aidabank}@db:5432/${POSTGRES_DB:-aidabank}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0,web}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-true}
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+      # ngrok's request inspector, when the agent is started from the
+      # dashboard (it runs inside this container). http://localhost:4040
+      - "${NGROK_INSPECTOR_PORT:-4040}:4040"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Runs the tunnel as its own container instead of letting the dashboard start
+  # it inside `web`. Use this for an unattended deployment, or if you would
+  # rather the web process could not spawn anything:
+  #
+  #   docker compose --profile ngrok up -d
+  #
+  # Needs NGROK_AUTHTOKEN in .env. The app finds the address either way -- it
+  # tries both this service and an in-container agent.
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["ngrok"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    command: http web:8000 --log stdout
+    ports:
+      # 4041, so it does not clash with the in-container agent's inspector.
+      - "${NGROK_STANDALONE_INSPECTOR_PORT:-4041}:4040"
+
+  # Alternative tunnel that needs no account. Its URL is only printed in the
+  # logs -- there is no local API to query -- so set it on the Live URL tab
+  # with mode "Manual".
+  #   docker compose --profile cloudflared up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["cloudflared"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --url http://web:8000
+
+volumes:
+  pgdata:

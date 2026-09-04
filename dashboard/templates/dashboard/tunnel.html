@@ -1,0 +1,219 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Live URL{% endblock %}
+{% block heading %}Live public URL{% endblock %}
+{% block lede %}The address AIDA calls. An ngrok hostname changes every time the agent restarts, so it is detected automatically rather than typed into a config file.{% endblock %}
+
+{% block content %}
+
+<div class="tabs">
+  <a href="{% url 'dashboard:settings' %}">Integration</a>
+  <a href="{% url 'dashboard:providers' %}">Providers</a>
+  <a href="{% url 'dashboard:tunnel' %}" class="on">Live URL</a>
+</div>
+
+{% for message in messages %}
+<div class="note {% if message.tags == 'error' %}bad{% elif message.tags == 'success' %}good{% endif %}">{{ message }}</div>
+{% endfor %}
+
+<section class="panel">
+  <h2>
+    Current address
+    {% if live %}<span class="pill ok">live</span>{% else %}<span class="pill bad">no tunnel</span>{% endif %}
+  </h2>
+  <div class="panel-body">
+    {% if base_url %}
+      <div class="hero-url">
+        <code id="base-url">{{ base_url }}</code>
+        <button class="btn" data-copy="#base-url">Copy</button>
+        <form method="post" style="display:inline">
+          {% csrf_token %}
+          <button class="btn ghost" type="submit" name="action" value="refresh">Re-detect</button>
+        </form>
+      </div>
+      {% if detected %}
+        <p style="color:var(--muted);margin:12px 0 0">
+          Detected from the ngrok agent{% if config.detected_at %}, last confirmed {{ config.detected_at|date:"H:i:s" }}{% endif %}.
+          Verify it end to end:
+          <a href="{{ health_url }}" target="_blank" rel="noopener">{{ health_url }}</a>
+          — that endpoint needs no API key, so it should return JSON in a browser.
+        </p>
+      {% elif config.mode == "manual" %}
+        <p style="color:var(--muted);margin:12px 0 0">Set manually below.</p>
+      {% else %}
+        <p style="color:var(--muted);margin:12px 0 0">
+          Falling back to <code>PUBLIC_BASE_URL</code>{% if not env_base_url %} / the address you are browsing on{% endif %}.
+          This is almost certainly not reachable from AIDA.
+        </p>
+      {% endif %}
+    {% else %}
+      <p class="empty" style="padding:8px 0">No address resolved yet.</p>
+    {% endif %}
+
+    {% if detect_error %}
+    <div class="note warn" style="margin:16px 0 0">
+      <strong>Auto-detect failed.</strong> {{ detect_error }}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if show_ngrok %}
+<section class="panel">
+  <h2>
+    ngrok agent
+    {% if agent_running %}<span class="pill ok">running</span>{% else %}<span class="pill mute">stopped</span>{% endif %}
+  </h2>
+  <div class="panel-body">
+    {% if not agent_available %}
+      <div class="note warn">
+        The ngrok binary isn't in this container — rebuild the image with
+        <code>docker compose up -d --build</code> to get the Start button, or run the
+        agent as its own service with <code>docker compose --profile ngrok up -d</code>.
+      </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="field-grid">
+        <div class="field wide">
+          <label for="ngrok_authtoken">Authtoken</label>
+          <input type="password" name="ngrok_authtoken" id="ngrok_authtoken"
+                 autocomplete="new-password"
+                 placeholder="{% if has_authtoken %}•••••••• stored — leave blank to keep{% else %}paste your token from dashboard.ngrok.com{% endif %}">
+          <small>
+            Free, from
+            <a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">ngrok → Your Authtoken</a>.
+            Stored here so you don't have to edit <code>.env</code> and rebuild.
+          </small>
+        </div>
+      </div>
+      <div class="actions" style="margin-bottom:0">
+        {% if agent_running %}
+          <button class="btn ghost" type="submit" name="action" value="stop">Stop tunnel</button>
+          <button class="btn ghost" type="submit" name="action" value="start">Restart</button>
+        {% else %}
+          <button class="btn" type="submit" name="action" value="start"
+                  {% if not agent_available %}disabled{% endif %}>Start tunnel</button>
+        {% endif %}
+        <span style="color:var(--muted)">{{ agent_detail }}</span>
+      </div>
+    </form>
+
+    <p style="color:var(--muted);margin-bottom:0">
+      Starting takes a few seconds while ngrok negotiates the tunnel. Its own request
+      inspector is at <a href="http://localhost:4040" target="_blank" rel="noopener">localhost:4040</a> —
+      useful for replaying AIDA's calls without making another phone call.
+      You can also run the agent as a separate container instead:
+      <code>docker compose --profile ngrok up -d</code>.
+    </p>
+  </div>
+</section>
+{% else %}
+<div class="note">
+  You're browsing this on <code>{{ browsing_host }}</code>, which isn't local, so the
+  ngrok controls are hidden — a service already reachable on a real hostname doesn't
+  need a tunnel. Set the address below with mode <em>Manual</em>, or via
+  <code>PUBLIC_BASE_URL</code>.
+</div>
+{% endif %}
+
+<section class="panel">
+  <h2>Endpoints for AIDA <small>built on the address above</small></h2>
+  <div class="panel-body">
+    <div class="copy-row">
+      <button class="btn ghost" data-copy="#all-urls">Copy all {{ endpoints|length }} URLs</button>
+      <span style="color:var(--muted)">Header on every call: <code>X-API-Key: {{ api_key }}</code></span>
+    </div>
+    <pre id="all-urls">{% for endpoint in endpoints %}{{ endpoint.name }}
+{{ endpoint.method }} {{ endpoint.url }}
+{% endfor %}</pre>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Tool</th><th>URL</th><th></th></tr></thead>
+      <tbody>
+        {% for endpoint in endpoints %}
+        <tr>
+          <td class="mono">{{ endpoint.name }}</td>
+          <td class="mono"><span id="url-{{ forloop.counter }}">{{ endpoint.url }}</span></td>
+          <td><button class="btn ghost" data-copy="#url-{{ forloop.counter }}">Copy</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>
+    If your platform can't send headers
+    <small>AIDA's tool definition has no headers field</small>
+  </h2>
+  <div class="panel-body">
+    <div class="note warn">
+      These URLs carry the API key in the query string. That is a real trade-off —
+      a key in a URL lands in access logs, proxy logs and the ngrok inspector, where a
+      header would not. Use it when the platform gives you no header option, and treat
+      the key as rotatable rather than secret.
+    </div>
+    <div class="copy-row">
+      <button class="btn ghost" data-copy="#keyed-urls">Copy all {{ endpoints_keyed|length }} URLs with key</button>
+    </div>
+    <pre id="keyed-urls">{% for endpoint in endpoints_keyed %}{{ endpoint.name }}
+{{ endpoint.method }} {{ endpoint.url }}
+{% endfor %}</pre>
+    <p style="color:var(--muted);margin-bottom:0">
+      The key is also accepted as an <code>Authorization: Bearer</code> header or an
+      <code>api_key</code> field in the JSON body, whichever your platform supports.
+    </p>
+  </div>
+</section>
+
+<form method="post">
+  {% csrf_token %}
+  <section class="panel">
+    <h2>How to resolve the URL</h2>
+    <div class="panel-body">
+      <div class="field-grid">
+        <div class="field">
+          <label for="mode">Mode</label>
+          <select name="mode" id="mode">
+            {% for value, label in modes %}
+            <option value="{{ value }}" {% if config.mode == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="agent_api_url">ngrok agent API</label>
+          <input type="text" name="agent_api_url" id="agent_api_url" value="{{ config.agent_api_url }}">
+          <small>Inside compose this is <code>http://ngrok:4040/api/tunnels</code>.</small>
+        </div>
+        <div class="field wide">
+          <label for="manual_url">Manual URL</label>
+          <input type="text" name="manual_url" id="manual_url" value="{{ config.manual_url }}"
+                 placeholder="https://your-app.example.com">
+          <small>Used when mode is Manual — a cloudflared address, or a real deployment.</small>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="actions">
+    <button class="btn" type="submit" name="action" value="save">Save</button>
+  </div>
+</form>
+
+<script>
+document.addEventListener('click', function (event) {
+  const trigger = event.target.closest('[data-copy]');
+  if (!trigger) return;
+  event.preventDefault();
+  const target = document.querySelector(trigger.dataset.copy);
+  if (!target) return;
+  navigator.clipboard.writeText(target.textContent.trim()).then(function () {
+    const original = trigger.textContent;
+    trigger.textContent = 'Copied';
+    setTimeout(function () { trigger.textContent = original; }, 1200);
+  });
+});
+</script>
+{% endblock %}
